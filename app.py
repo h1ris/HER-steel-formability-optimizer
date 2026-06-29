@@ -2,20 +2,35 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import os
 
 st.set_page_config(page_title="Automotive Steel HER Dashboard", layout="wide")
 
-# Safe loading wrapper for the unified machine learning pipeline artifact
+# Safe loading wrapper with automated absolute directory resolution
 @st.cache_resource
 def load_pipeline():
-    return joblib.load('final_her_pipeline.joblib')
+    # Force the script to look at its own exact folder pathway first
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    primary_path = os.path.join(current_dir, 'final_her_pipeline.joblib')
+    fallback_path = 'final_her_pipeline.joblib'
+    
+    if os.path.exists(primary_path):
+        return joblib.load(primary_path)
+    elif os.path.exists(fallback_path):
+        return joblib.load(fallback_path)
+    else:
+        # Search the entire working tree dynamically as a final line of defense
+        for root, _, files in os.walk('.'):
+            if 'final_her_pipeline.joblib' in files:
+                return joblib.load(os.path.join(root, 'final_her_pipeline.joblib'))
+        raise FileNotFoundError("Could not locate final_her_pipeline.joblib anywhere in the workspace.")
 
 try:
     pipeline = load_pipeline()
     model_loaded = True
 except Exception as e:
-    st.error(f"Configuration Error: 'final_her_pipeline.joblib' not detected in the current active folder path.")
-    st.info("Ensure the downloaded file from Kaggle is saved exactly alongside this script.")
+    st.error(f"Configuration Error: 'final_her_pipeline.joblib' could not be initialized.")
+    st.info(f"System Log: {str(e)}")
     model_loaded = False
 
 st.title("⚙️ Automotive DP/CP Steel Edge Formability Optimizer")
@@ -30,7 +45,6 @@ if model_loaded:
         
         with col1:
             st.markdown("### Process Geometry")
-            # Clear Dropdown Selectors for Categorical Attributes
             steel_grade = st.selectbox("Steel Designation Grade", ["DP600", "DP780", "DP800", "DP980", "DP1180", "CP590", "CP800", "CP1200"])
             steel_type = "CP" if "CP" in steel_grade else "DP"
             
@@ -40,13 +54,11 @@ if model_loaded:
 
         with col2:
             st.markdown("### Numerical Dimensions")
-            # Pure Numerical Inputs replacing sliders for exact physical accuracy
             thickness = st.number_input("Sheet Thickness (mm)", min_value=0.5, max_value=6.0, value=2.5, step=0.1)
             clearance = st.number_input("Die Tooling Clearance (%)", min_value=2.0, max_value=50.0, value=12.0, step=0.5)
 
         with col3:
             st.markdown("### Material Tensile Values")
-            # Smart baseline defaults depending on the user's chosen grade profile
             default_ys = 548 if "CP" in steel_grade else 450
             default_uts = 614 if "CP" in steel_grade else 600
             default_n = 0.10 if "CP" in steel_grade else 0.15
@@ -56,7 +68,6 @@ if model_loaded:
             n_val = st.number_input("Strain Hardening Exponent (n-value)", min_value=0.01, max_value=0.40, value=default_n, step=0.01)
 
         if st.button("Run Prediction Engine"):
-            # Execute automated macro mechanical property feature engine mapping
             psm = (uts - ys) * n_val
             s_ratio = ys / uts
             uts_n = uts * n_val
@@ -68,9 +79,7 @@ if model_loaded:
                 'Plastic_Strain_Margin': psm, 'Strength_Ratio_YS_UTS': s_ratio, 'UTS_x_n': uts_n
             }])
             
-            # Compute end-to-end forward vector processing arrays
             prediction = pipeline.predict(payload)[0]
-            
             st.balloons()
             st.success(f"### Predicted Hole Expansion Ratio (HER): {prediction:.2f}%")
 
@@ -95,7 +104,6 @@ if model_loaded:
             n_val = 0.10 if steel_type == "CP" else 0.15
             psm = (uts - ys) * n_val
             
-            # Scan structural boundary combinations across the simulated parameter arrays
             for c in clearance_space:
                 for b_ori in ["Burr Down", "Burr Up"]:
                     payload = pd.DataFrame([{

@@ -101,22 +101,6 @@ if model_loaded:
 
             st.balloons()
             st.success(f"### Predicted Hole Expansion Ratio (HER): {prediction:.2f}%")
-            
-            # Professional Residual Deviation Plot
-            st.markdown("---")
-            st.subheader("📊 Industry Residual Variance Profile")
-            
-            fig, ax = plt.subplots(figsize=(6, 2.5))
-            # Representative validation tracking error points
-            grades = ['DP600', 'DP780', 'CP590 (Current)', 'DP980', 'CP800']
-            errors = [1.2, -3.4, 0.0 if prediction == 176.0 else -4.1, 2.8, -1.9]
-            
-            colors = ['#1B5E20' if e >= 0 else '#B71C1C' for e in errors]
-            ax.barh(grades, errors, color=colors, edgecolor='black', height=0.5)
-            ax.axvline(0, color='black', lw=1.5, linestyle='-')
-            ax.set_xlabel('Model Deviation vs. Lab Validation Bounds (%)')
-            ax.grid(True, linestyle=':', alpha=0.5)
-            st.pyplot(fig)
 
     elif mode == "🛠️ Automatic Process Optimizer":
         st.subheader("🛠️ Mode 2: Automated Die Clearance Optimization")
@@ -205,7 +189,6 @@ if model_loaded:
                         if pred > 176.0: pred = 176.0
                     y_output_space.append(pred)
                 else:
-                    # Alternative parameter cross-mapping tracking logic
                     val_y = c_loop if var_y == "Die Tooling Clearance (%)" else t_loop if var_y == "Sheet Thickness (mm)" else uts_loop if var_y == "Ultimate Tensile Strength (MPa)" else n_loop
                     y_output_space.append(val_y)
             

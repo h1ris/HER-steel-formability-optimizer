@@ -41,13 +41,31 @@ steel_database = {
     "CP1200": {"YS": 980, "UTS": 1250, "n": 0.06, "Type": "CP"}
 }
 
-if model_loaded:
-    mode = st.sidebar.radio("Application Mode:", [
-        "Forward Predictor Engine", 
-        "Automatic Process Optimizer", 
-        "Advanced Material Analytics"
-    ])
+# Sidebar Mode Navigation
+st.sidebar.markdown("## Application Control Center")
+mode = st.sidebar.radio("Select Operational Mode:", [
+    "Forward Predictor Engine", 
+    "Automatic Process Optimizer", 
+    "Advanced Material Analytics"
+])
 
+# Sidebar Metallurgical Diagram View Panel
+st.sidebar.markdown("---")
+st.sidebar.markdown("## Reference Mechanics Panel")
+show_diagram = st.sidebar.checkbox("Display Edge Deformation Reference Diagram")
+
+if show_diagram:
+    st.sidebar.markdown("### Hole Expansion Test Schematics")
+    # Searches local working directory or falls back to an educational placeholder
+    if os.path.exists("hole_expansion_mechanics.png"):
+        st.sidebar.image("hole_expansion_mechanics.png", caption="Deformation Window Comparison: Sheared vs defect-free Reamed boundaries.", use_container_width=True)
+    else:
+        st.sidebar.warning("Reference illustration asset (hole_expansion_mechanics.png) not detected in root directory.")
+
+st.title("Automotive Advanced High-Strength Steel (AHSS) Formability Engine")
+st.markdown("Predict and optimize the Hole Expansion Ratio (HER %) for advanced edge-stamping configurations.")
+
+if model_loaded:
     def render_material_inputs(prefix, default_grade="DP600", show_clearance=True):
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -78,8 +96,8 @@ if model_loaded:
                 
         return steel_grade, steel_type, hole_prep, burr_ori, punch_geo, thickness, clearance, ys, uts, n_val
 
-    if mode == "🔮 Forward Predictor Engine":
-        st.subheader("🔮 Mode 1: Forward Performance Prediction")
+    if mode == "Forward Predictor Engine":
+        st.subheader("Mode 1: Forward Performance Prediction")
         s_grade, s_type, h_prep, b_ori, p_geo, thick, clear, ys, uts, n_val = render_material_inputs("fwd")
         
         if st.button("Run Prediction Engine"):
@@ -99,11 +117,10 @@ if model_loaded:
                 prediction = prediction * 1.165
                 if prediction > 176.0: prediction = 176.0
 
-            st.balloons()
             st.success(f"### Predicted Hole Expansion Ratio (HER): {prediction:.2f}%")
 
-    elif mode == "🛠️ Automatic Process Optimizer":
-        st.subheader("🛠️ Mode 2: Automated Die Clearance Optimization")
+    elif mode == "Automatic Process Optimizer":
+        st.subheader("Mode 2: Automated Die Clearance Optimization")
         s_grade, s_type, h_prep, b_ori, p_geo, thick, _, ys, uts, n_val = render_material_inputs("opt", show_clearance=False)
 
         if st.button("Isolate Optimum Manufacturing Window"):
@@ -143,8 +160,8 @@ if model_loaded:
             ax.grid(True, linestyle=':', alpha=0.6)
             st.pyplot(fig)
 
-    elif mode == "📈 Advanced Material Analytics":
-        st.subheader("📊 Mode 3: Dynamic Multi-Axis Parametric Sweeper")
+    elif mode == "Advanced Material Analytics":
+        st.subheader("Mode 3: Dynamic Multi-Axis Parametric Sweeper")
         s_grade, s_type, h_prep, b_ori, p_geo, thick, clear, ys, uts, n_val = render_material_inputs("anl")
         
         st.markdown("---")

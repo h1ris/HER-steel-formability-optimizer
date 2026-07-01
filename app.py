@@ -43,9 +43,9 @@ steel_database = {
 
 if model_loaded:
     mode = st.sidebar.radio("Application Mode:", [
-        "🔮 Forward Predictor Engine", 
-        "🛠️ Automatic Process Optimizer", 
-        "📈 Advanced Material Analytics"
+        "Forward Predictor Engine", 
+        "Automatic Process Optimizer", 
+        "Advanced Material Analytics"
     ])
 
     def render_material_inputs(prefix, default_grade="DP600", show_clearance=True):

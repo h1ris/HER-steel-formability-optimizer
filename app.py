@@ -49,19 +49,6 @@ mode = st.sidebar.radio("Select Operational Mode:", [
     "Advanced Material Analytics"
 ])
 
-# Sidebar Metallurgical Diagram View Panel
-st.sidebar.markdown("---")
-st.sidebar.markdown("## Reference Mechanics Panel")
-show_diagram = st.sidebar.checkbox("Display Edge Deformation Reference Diagram")
-
-if show_diagram:
-    st.sidebar.markdown("### Hole Expansion Test Schematics")
-    # Searches local working directory or falls back to an educational placeholder
-    if os.path.exists("hole_expansion_mechanics.png"):
-        st.sidebar.image("hole_expansion_mechanics.png", caption="Deformation Window Comparison: Sheared vs defect-free Reamed boundaries.", use_container_width=True)
-    else:
-        st.sidebar.warning("Reference illustration asset (hole_expansion_mechanics.png) not detected in root directory.")
-
 st.title("Automotive Advanced High-Strength Steel (AHSS) Formability Engine")
 st.markdown("Predict and optimize the Hole Expansion Ratio (HER %) for advanced edge-stamping configurations.")
 

@@ -52,8 +52,8 @@ st.markdown("Predict and optimize the Hole Expansion Ratio (HER %) for advanced 
 if not model_loaded:
     st.error("Critical System Warning: Prebuilt model asset file 'final_her_pipeline.joblib' not detected in root directory.")
 else:
-    # Common input renderer used for Mode 1, 2, and 3
-    def render_material_inputs(prefix, default_grade="DP600", show_clearance=True, is_optimizer=False):
+    # Common input renderer used across all modes
+    def render_material_inputs(prefix, default_grade="DP600", show_clearance=True):
         col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown("### Boundary Conditions")
@@ -63,7 +63,6 @@ else:
             
             hole_prep = st.selectbox("Hole Blanking Methodology", ["Sheared", "Reamed"], key=f"{prefix}_prep")
             
-            # Updated dropdown labels with explicit contact descriptions
             if hole_prep == "Reamed":
                 burr_ori = "None"
             else:
@@ -82,7 +81,6 @@ else:
             st.markdown("### Structural Dimensions")
             thickness = st.number_input("Sheet Thickness (mm)", min_value=0.5, max_value=6.0, value=2.5, step=0.1, key=f"{prefix}_thick")
             
-            # Handle clearance rules based on user criteria and graph trends
             if show_clearance:
                 default_clear = 14.0 if punch_geo == "Conical" else 12.0
                 clearance = st.number_input("Die Tooling Clearance (% of Thickness t)", min_value=2.0, max_value=16.5, value=default_clear, step=0.5, key=f"{prefix}_clear")
@@ -92,9 +90,10 @@ else:
         with col3:
             st.markdown("### Mechanical Metrics")
             db = steel_database[steel_grade]
-            ys = st.number_input("Yield Strength, YS (MPa)", min_value=100, max_value=1500, value=db["YS"], step=1, key=f"{prefix}_ys", disabled=True)
-            uts = st.number_input("Ultimate Tensile Strength, UTS (MPa)", min_value=200, max_value=2000, value=db["UTS"], step=1, key=f"{prefix}_uts", disabled=True)
-            n_val = st.number_input("Strain Hardening Exponent (n)", min_value=0.01, max_value=0.40, value=db["n"], step=0.01, key=f"{prefix}_n", disabled=True)
+            # Set disabled=False so fields can be manually overridden during the presentation
+            ys = st.number_input("Yield Strength, YS (MPa)", min_value=100, max_value=1500, value=db["YS"], step=1, key=f"{prefix}_ys", disabled=False)
+            uts = st.number_input("Ultimate Tensile Strength, UTS (MPa)", min_value=200, max_value=2000, value=db["UTS"], step=1, key=f"{prefix}_uts", disabled=False)
+            n_val = st.number_input("Strain Hardening Exponent (n)", min_value=0.01, max_value=0.40, value=db["n"], step=0.01, key=f"{prefix}_n", disabled=False)
                 
         return steel_grade, steel_type, hole_prep, burr_ori, punch_geo, thickness, clearance, ys, uts, n_val
 
@@ -123,7 +122,7 @@ else:
             
             prediction = pipeline.predict(payload)[0]
             
-            # Physics scaling adjustment configurations
+            # Physics scaling configurations
             if h_prep == "Reamed":
                 if prediction < 100.0:
                     prediction = float(98.5 + (0.05 * uts))
@@ -142,10 +141,10 @@ else:
         st.subheader("Mode 2: Automated Die Clearance Optimization")
         st.markdown("*Description: Iterates through the permitted industrial clearance window to target the highest attainable HER percentage before edge cracking.*")
         
-        s_grade, s_type, h_prep, b_ori, p_geo, thick, _, ys, uts, n_val = render_material_inputs("opt", show_clearance=False, is_optimizer=True)
+        s_grade, s_type, h_prep, b_ori, p_geo, thick, _, ys, uts, n_val = render_material_inputs("opt", show_clearance=False)
 
         if st.button("Isolate Optimum Manufacturing Window"):
-            # Enforce strict clearance upper limit constraints (Max 16.5% as per industry parameters)
+            # Bounded clearance matching graph trends (Max 16.5% of t)
             clearance_space = np.linspace(5, 16.5, 48)
             predicted_hers = []
             psm = (uts - ys) * n_val
@@ -192,7 +191,7 @@ else:
             st.pyplot(fig)
 
     # ==============================================================================
-    # MODE 3: ADVANCED MATERIAL ANALYTICS (Targeted Dropdowns)
+    # MODE 3: ADVANCED MATERIAL ANALYTICS
     # ==============================================================================
     elif mode == "Advanced Material Analytics":
         st.subheader("Mode 3: Dynamic Multi-Axis Parametric Sweeper")
@@ -203,7 +202,6 @@ else:
         st.markdown("---")
         st.markdown("### Construct Parametric Axis Mapping Options")
         
-        # Enforce restricted 16.5% tracking bounds for the clearance parameter space arrays
         selectable_metrics = {
             "Die Tooling Clearance (% of Thickness t)": np.linspace(5, 16.5, 48),
             "Sheet Thickness (mm)": np.linspace(1.0, 4.0, 50),
@@ -215,7 +213,7 @@ else:
         with col_x:
             var_x = st.selectbox("Select X-Axis Independent Parameter", list(selectable_metrics.keys()))
         with col_y:
-            # Locked down to prevent unnecessary metric confusion
+            # Locked down to only show the target performance vector
             var_y = st.selectbox("Select Y-Axis Dependent Target Parameter", ["Predicted Hole Expansion Ratio (HER %)"])
             
         if st.button("Generate 2D Parametric Interaction Graph"):

@@ -16,7 +16,7 @@ st.set_page_config(page_title="Automotive Steel HER Dashboard", layout="wide")
 # ==============================================================================
 @st.cache_resource
 def train_and_initialize_pipeline():
-    dataset_path = '135 HER_Dataset_Batch1_Batch2_with_engineered_features.xlsx'
+    dataset_path = 'dataset for her prediction.xlsx'
     if not os.path.exists(dataset_path):
         current_dir_files = [f for f in os.listdir('.') if f.endswith('.xlsx')]
         if current_dir_files:

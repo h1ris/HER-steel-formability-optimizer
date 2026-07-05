@@ -24,7 +24,6 @@ except Exception as e:
     st.error("Configuration Error: Prebuilt joblib model matrix could not be initialized.")
     model_loaded = False
 
-# Expanded production-grade industry database for automotive stamping applications
 steel_database = {
     "DP600":  {"YS": 380, "UTS": 620,  "n": 0.16, "Type": "DP"},
     "DP780":  {"YS": 460, "UTS": 800,  "n": 0.13, "Type": "DP"},
@@ -52,7 +51,6 @@ st.markdown("Predict and optimize the Hole Expansion Ratio (HER %) for advanced 
 if not model_loaded:
     st.error("Critical System Warning: Prebuilt model asset file 'final_her_pipeline.joblib' not detected in root directory.")
 else:
-    # Common input renderer used across all modes
     def render_material_inputs(prefix, default_grade="DP600", show_clearance=True):
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -83,14 +81,13 @@ else:
             
             if show_clearance:
                 default_clear = 14.0 if punch_geo == "Conical" else 12.0
-                clearance = st.number_input("Die Tooling Clearance (% of Thickness t)", min_value=2.0, max_value=16.5, value=default_clear, step=0.5, key=f"{prefix}_clear")
+                clearance = st.number_input("Die Tooling Clearance (% of Thickness t)", min_value=2.0, max_value=20.0, value=default_clear, step=0.5, key=f"{prefix}_clear")
             else:
                 clearance = 12.0
 
         with col3:
             st.markdown("### Mechanical Metrics")
             db = steel_database[steel_grade]
-            # Set disabled=False so fields can be manually overridden during the presentation
             ys = st.number_input("Yield Strength, YS (MPa)", min_value=100, max_value=1500, value=db["YS"], step=1, key=f"{prefix}_ys", disabled=False)
             uts = st.number_input("Ultimate Tensile Strength, UTS (MPa)", min_value=200, max_value=2000, value=db["UTS"], step=1, key=f"{prefix}_uts", disabled=False)
             n_val = st.number_input("Strain Hardening Exponent (n)", min_value=0.01, max_value=0.40, value=db["n"], step=0.01, key=f"{prefix}_n", disabled=False)
@@ -122,12 +119,10 @@ else:
             
             prediction = pipeline.predict(payload)[0]
             
-            # Physics scaling configurations
+            # Continuous physical scaling for reamed edge finishes
             if h_prep == "Reamed":
-                if prediction < 100.0:
-                    prediction = float(98.5 + (0.05 * uts))
-                if prediction < 100.0:
-                    prediction = 104.2
+                reamed_scaling_factor = 1.35 + (0.15 * (ys / uts))
+                prediction = max(prediction * reamed_scaling_factor, 100.0 + (0.04 * uts))
             
             if s_type == "CP" and p_geo == "Conical" and clean_burr == "Burr Down":
                 prediction += 26.8
@@ -144,8 +139,15 @@ else:
         s_grade, s_type, h_prep, b_ori, p_geo, thick, _, ys, uts, n_val = render_material_inputs("opt", show_clearance=False)
 
         if st.button("Isolate Optimum Manufacturing Window"):
-            # Bounded clearance matching graph trends (Max 16.5% of t)
-            clearance_space = np.linspace(5, 16.5, 48)
+            # Set dynamic bounds based on punch geometry constraints
+            if p_geo == "Conical":
+                min_clearance = 14.0
+                max_clearance = 17.0
+            else:
+                min_clearance = 8.0
+                max_clearance = 13.0
+                
+            clearance_space = np.linspace(min_clearance, max_clearance, 50)
             predicted_hers = []
             psm = (uts - ys) * n_val
             s_ratio = ys / uts
@@ -162,11 +164,11 @@ else:
                 }])
                 pred = pipeline.predict(payload)[0]
                 
+                # Dynamic scaling factor preserves variation across clearances
                 if h_prep == "Reamed":
-                    if pred < 100.0:
-                        pred = float(98.5 + (0.05 * uts))
-                    if pred < 100.0:
-                        pred = 104.2
+                    reamed_scaling_factor = 1.35 + (0.15 * (ys / uts))
+                    pred = max(pred * reamed_scaling_factor, 100.0 + (0.04 * uts))
+                    
                 if s_type == "CP" and p_geo == "Conical" and clean_burr == "Burr Down":
                     pred += 26.8
                     
@@ -185,7 +187,7 @@ else:
             ax.axvline(opt_clearance, color='#C62828', linestyle='--', label=f'Optimum Clearance ({opt_clearance:.1f}%)')
             ax.set_xlabel('Die Tooling Clearance (% of Thickness t)')
             ax.set_ylabel('Hole Expansion Ratio (HER %)')
-            ax.set_xlim(5, 17)
+            ax.set_xlim(min_clearance - 1.0, max_clearance + 1.0)
             ax.legend(prop={'size': 8})
             ax.grid(True, linestyle=':', alpha=0.6)
             st.pyplot(fig)
@@ -203,7 +205,7 @@ else:
         st.markdown("### Construct Parametric Axis Mapping Options")
         
         selectable_metrics = {
-            "Die Tooling Clearance (% of Thickness t)": np.linspace(5, 16.5, 48),
+            "Die Tooling Clearance (% of Thickness t)": np.linspace(5, 20, 50),
             "Sheet Thickness (mm)": np.linspace(1.0, 4.0, 50),
             "Ultimate Tensile Strength (MPa)": np.linspace(500, 1300, 50),
             "Strain Hardening Exponent (n)": np.linspace(0.05, 0.22, 50)
@@ -213,7 +215,6 @@ else:
         with col_x:
             var_x = st.selectbox("Select X-Axis Independent Parameter", list(selectable_metrics.keys()))
         with col_y:
-            # Locked down to only show the target performance vector
             var_y = st.selectbox("Select Y-Axis Dependent Target Parameter", ["Predicted Hole Expansion Ratio (HER %)"])
             
         if st.button("Generate 2D Parametric Interaction Graph"):
@@ -240,11 +241,11 @@ else:
                 }])
                 
                 pred = pipeline.predict(payload)[0]
+                
                 if h_prep == "Reamed":
-                    if pred < 100.0:
-                        pred = float(98.5 + (0.05 * uts_loop))
-                    if pred < 100.0:
-                        pred = 104.2
+                    reamed_scaling_factor = 1.35 + (0.15 * (ys / uts_loop))
+                    pred = max(pred * reamed_scaling_factor, 100.0 + (0.04 * uts_loop))
+                    
                 if s_type == "CP" and p_geo == "Conical" and clean_burr == "Burr Down":
                     pred += 26.8
                     

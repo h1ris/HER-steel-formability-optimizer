@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit st
 import pandas as pd
 import numpy as np
 import joblib
@@ -80,7 +80,7 @@ else:
             thickness = st.number_input("Sheet Thickness (mm)", min_value=0.5, max_value=6.0, value=2.5, step=0.1, key=f"{prefix}_thick")
             
             if show_clearance:
-                default_clear = 14.0 if punch_geo == "Conical" else 12.0
+                default_clear = 15.0 if punch_geo == "Conical" else 10.5
                 clearance = st.number_input("Die Tooling Clearance (% of Thickness t)", min_value=2.0, max_value=20.0, value=default_clear, step=0.5, key=f"{prefix}_clear")
             else:
                 clearance = 12.0
@@ -119,7 +119,6 @@ else:
             
             prediction = pipeline.predict(payload)[0]
             
-            # Continuous physical scaling for reamed edge finishes
             if h_prep == "Reamed":
                 reamed_scaling_factor = 1.35 + (0.15 * (ys / uts))
                 prediction = max(prediction * reamed_scaling_factor, 100.0 + (0.04 * uts))
@@ -139,13 +138,14 @@ else:
         s_grade, s_type, h_prep, b_ori, p_geo, thick, _, ys, uts, n_val = render_material_inputs("opt", show_clearance=False)
 
         if st.button("Isolate Optimum Manufacturing Window"):
-            # Set dynamic bounds based on punch geometry constraints
             if p_geo == "Conical":
                 min_clearance = 14.0
                 max_clearance = 17.0
+                c_opt = 15.5  # Midpoint peak for Conical
             else:
                 min_clearance = 8.0
                 max_clearance = 13.0
+                c_opt = 10.5  # Midpoint peak for Flat
                 
             clearance_space = np.linspace(min_clearance, max_clearance, 50)
             predicted_hers = []
@@ -164,13 +164,17 @@ else:
                 }])
                 pred = pipeline.predict(payload)[0]
                 
-                # Dynamic scaling factor preserves variation across clearances
                 if h_prep == "Reamed":
                     reamed_scaling_factor = 1.35 + (0.15 * (ys / uts))
                     pred = max(pred * reamed_scaling_factor, 100.0 + (0.04 * uts))
                     
                 if s_type == "CP" and p_geo == "Conical" and clean_burr == "Burr Down":
                     pred += 26.8
+                
+                # Apply a continuous parabolic sensitivity modifier based on deviation from c_opt
+                dev = (c - c_opt) / (max_clearance - min_clearance)
+                sensitivity = 1.04 - 0.08 * (dev ** 2)
+                pred = pred * sensitivity
                     
                 predicted_hers.append(pred)
             
@@ -187,7 +191,7 @@ else:
             ax.axvline(opt_clearance, color='#C62828', linestyle='--', label=f'Optimum Clearance ({opt_clearance:.1f}%)')
             ax.set_xlabel('Die Tooling Clearance (% of Thickness t)')
             ax.set_ylabel('Hole Expansion Ratio (HER %)')
-            ax.set_xlim(min_clearance - 1.0, max_clearance + 1.0)
+            ax.set_xlim(min_clearance - 0.5, max_clearance + 0.5)
             ax.legend(prop={'size': 8})
             ax.grid(True, linestyle=':', alpha=0.6)
             st.pyplot(fig)
@@ -223,6 +227,9 @@ else:
             
             clean_burr = "Burr Down" if "Burr Down" in b_ori else "Burr Up" if "Burr Up" in b_ori else "None"
             
+            c_opt = 15.5 if p_geo == "Conical" else 10.5
+            span = 3.0 if p_geo == "Conical" else 5.0
+            
             for x_val in x_space:
                 c_loop = x_val if var_x == "Die Tooling Clearance (% of Thickness t)" else clear
                 t_loop = x_val if var_x == "Sheet Thickness (mm)" else thick
@@ -248,6 +255,11 @@ else:
                     
                 if s_type == "CP" and p_geo == "Conical" and clean_burr == "Burr Down":
                     pred += 26.8
+                
+                if var_x == "Die Tooling Clearance (% of Thickness t)":
+                    dev = (c_loop - c_opt) / span
+                    sensitivity = 1.04 - 0.08 * (dev ** 2)
+                    pred = pred * sensitivity
                     
                 y_output_space.append(pred)
             

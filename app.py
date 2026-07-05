@@ -80,7 +80,7 @@ else:
             thickness = st.number_input("Sheet Thickness (mm)", min_value=0.5, max_value=6.0, value=2.5, step=0.1, key=f"{prefix}_thick")
             
             if show_clearance:
-                default_clear = 15.0 if punch_geo == "Conical" else 10.5
+                default_clear = 15.5 if punch_geo == "Conical" else 10.5
                 clearance = st.number_input("Die Tooling Clearance (% of Thickness t)", min_value=2.0, max_value=20.0, value=default_clear, step=0.5, key=f"{prefix}_clear")
             else:
                 clearance = 12.0
@@ -138,17 +138,27 @@ else:
         s_grade, s_type, h_prep, b_ori, p_geo, thick, _, ys, uts, n_val = render_material_inputs("opt", show_clearance=False)
 
         if st.button("Isolate Optimum Manufacturing Window"):
+            # Expand the graph tracking array down to 8% for both geometries
+            graph_min = 8.0
+            
             if p_geo == "Conical":
-                min_clearance = 14.0
-                max_clearance = 17.0
-                c_opt = 15.5  # Midpoint peak for Conical
+                graph_max = 17.0
+                c_opt = 15.5
+                valid_min = 14.0   # Strict optimization boundary lower limit
+                valid_max = 17.0   # Strict optimization boundary upper limit
+                skew_param = 1.8   # Profile skew factor for conical stress states
             else:
-                min_clearance = 8.0
-                max_clearance = 13.0
-                c_opt = 10.5  # Midpoint peak for Flat
+                graph_max = 13.0
+                c_opt = 10.5
+                valid_min = 8.0    # Strict optimization boundary lower limit
+                valid_max = 13.0   # Strict optimization boundary upper limit
+                skew_param = 1.2   # Profile skew factor for flat stress states
                 
-            clearance_space = np.linspace(min_clearance, max_clearance, 50)
+            clearance_space = np.linspace(graph_min, graph_max, 60)
             predicted_hers = []
+            valid_clearances = []
+            valid_predictions = []
+            
             psm = (uts - ys) * n_val
             s_ratio = ys / uts
             uts_n = uts * n_val
@@ -171,15 +181,24 @@ else:
                 if s_type == "CP" and p_geo == "Conical" and clean_burr == "Burr Down":
                     pred += 26.8
                 
-                # Apply a continuous parabolic sensitivity modifier based on deviation from c_opt
-                dev = (c - c_opt) / (max_clearance - min_clearance)
-                sensitivity = 1.04 - 0.08 * (dev ** 2)
-                pred = pred * sensitivity
+                # Physics-informed lognormal transformation to inject natural metallurgical asymmetry
+                shift_scaled = (c - (c_opt - 3.5)) / 3.5
+                if shift_scaled > 0:
+                    asymmetry_factor = (1.0 / (shift_scaled * 0.4 * np.sqrt(2 * np.pi))) * np.exp(-((np.log(shift_scaled)) ** 2) / (2 * (0.4 ** 2)))
+                    pred = pred * (0.88 + 0.12 * asymmetry_factor * skew_param)
+                else:
+                    pred = pred * 0.72
                     
                 predicted_hers.append(pred)
+                
+                # Keep track of points that fall strictly within valid manufacturing ranges
+                if valid_min <= c <= valid_max:
+                    valid_clearances.append(c)
+                    valid_predictions.append(pred)
             
-            max_her = max(predicted_hers)
-            opt_clearance = clearance_space[np.argmax(predicted_hers)]
+            # Find the optimum point strictly within the valid engineering window
+            max_her = max(valid_predictions)
+            opt_clearance = valid_clearances[np.argmax(valid_predictions)]
             
             st.markdown("---")
             col_res1, col_res2 = st.columns(2)
@@ -191,7 +210,7 @@ else:
             ax.axvline(opt_clearance, color='#C62828', linestyle='--', label=f'Optimum Clearance ({opt_clearance:.1f}%)')
             ax.set_xlabel('Die Tooling Clearance (% of Thickness t)')
             ax.set_ylabel('Hole Expansion Ratio (HER %)')
-            ax.set_xlim(min_clearance - 0.5, max_clearance + 0.5)
+            ax.set_xlim(graph_min - 0.5, graph_max + 0.5)
             ax.legend(prop={'size': 8})
             ax.grid(True, linestyle=':', alpha=0.6)
             st.pyplot(fig)
@@ -209,7 +228,7 @@ else:
         st.markdown("### Construct Parametric Axis Mapping Options")
         
         selectable_metrics = {
-            "Die Tooling Clearance (% of Thickness t)": np.linspace(5, 20, 50),
+            "Die Tooling Clearance (% of Thickness t)": np.linspace(8, 17, 50),
             "Sheet Thickness (mm)": np.linspace(1.0, 4.0, 50),
             "Ultimate Tensile Strength (MPa)": np.linspace(500, 1300, 50),
             "Strain Hardening Exponent (n)": np.linspace(0.05, 0.22, 50)
@@ -228,7 +247,7 @@ else:
             clean_burr = "Burr Down" if "Burr Down" in b_ori else "Burr Up" if "Burr Up" in b_ori else "None"
             
             c_opt = 15.5 if p_geo == "Conical" else 10.5
-            span = 3.0 if p_geo == "Conical" else 5.0
+            skew_param = 1.8 if p_geo == "Conical" else 1.2
             
             for x_val in x_space:
                 c_loop = x_val if var_x == "Die Tooling Clearance (% of Thickness t)" else clear
@@ -256,10 +275,13 @@ else:
                 if s_type == "CP" and p_geo == "Conical" and clean_burr == "Burr Down":
                     pred += 26.8
                 
-                if var_x == "Die Tooling Clearance (% of Thickness t)":
-                    dev = (c_loop - c_opt) / span
-                    sensitivity = 1.04 - 0.08 * (dev ** 2)
-                    pred = pred * sensitivity
+                # Match the lognormal scaling transformation if plotting clearance variations
+                shift_scaled = (c_loop - (c_opt - 3.5)) / 3.5
+                if shift_scaled > 0:
+                    asymmetry_factor = (1.0 / (shift_scaled * 0.4 * np.sqrt(2 * np.pi))) * np.exp(-((np.log(shift_scaled)) ** 2) / (2 * (0.4 ** 2)))
+                    pred = pred * (0.88 + 0.12 * asymmetry_factor * skew_param)
+                else:
+                    pred = pred * 0.72
                     
                 y_output_space.append(pred)
             
